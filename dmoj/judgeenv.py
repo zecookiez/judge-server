@@ -1,4 +1,5 @@
 import argparse
+import glob
 import os
 import ssl
 from typing import Dict, List, Set
@@ -12,6 +13,7 @@ from dmoj.utils import pyyaml_patch  # noqa: F401, imported for side effect
 from dmoj.utils.unicode import utf8text
 
 problem_dirs = ()
+problem_globs = ()
 problem_watches = ()
 env = ConfigNode(
     defaults={
@@ -53,7 +55,7 @@ exclude_executors: Set[str] = set()
 
 
 def load_env(cli=False, testsuite=False):  # pragma: no cover
-    global problem_dirs, only_executors, exclude_executors, log_file, server_host, server_port, no_ansi, no_ansi_emu, skip_self_test, env, startup_warnings, no_watchdog, problem_regex, case_regex, api_listen, secure, no_cert_check, cert_store, problem_watches, cli_history_file, cli_command
+    global problem_dirs, problem_globs, get_problem_roots, only_executors, exclude_executors, log_file, server_host, server_port, no_ansi, no_ansi_emu, skip_self_test, env, startup_warnings, no_watchdog, problem_regex, case_regex, api_listen, secure, no_cert_check, cert_store, problem_watches, cli_history_file, cli_command
 
     if cli:
         description = 'Starts a shell for interfacing with a local judge instance.'
@@ -156,13 +158,28 @@ def load_env(cli=False, testsuite=False):  # pragma: no cover
         if getattr(args, 'judge_key', None):
             env['key'] = args.judge_key
 
-        problem_dirs = env.problem_storage_root
-        if problem_dirs is None:
-            if not testsuite:
-                raise SystemExit(
-                    'problem_storage_root not specified in "%s"; no problems available to grade' % model_file
-                )
-        else:
+        if env.problem_storage_globs:
+            problem_globs = env.problem_storage_globs
+
+            if isinstance(problem_globs, str):
+                problem_globs = [problem_globs]
+
+            # Populate cache and send warnings
+            get_problem_roots = get_problem_roots_glob
+            get_problem_roots(warnings=True)
+
+            def get_path(x, y):
+                return utf8text(os.path.normpath(os.path.join(x, y)))
+
+            problem_watches = []
+            for dir_glob in problem_globs:
+                problem_watches += [get_path(_root, dir) for dir in glob.iglob(dir_glob, recursive=True)]
+
+        elif env.problem_storage_root:
+            problem_dirs = env.problem_storage_root
+
+            startup_warnings.append('problem_storage_root is deprecated, use problem_storage_globs instead')
+
             # Populate cache and send warnings
             get_problem_roots(warnings=True)
 
@@ -170,12 +187,19 @@ def load_env(cli=False, testsuite=False):  # pragma: no cover
                 return utf8text(os.path.normpath(os.path.join(x, y)))
 
             problem_watches = []
+            if isinstance(problem_dirs, str):
+                problem_dirs = [problem_dirs]
             for dir in problem_dirs:
                 if isinstance(dir, ConfigNode):
                     for _, recursive_root in dir.iteritems():
                         problem_watches.append(get_path(_root, recursive_root))
                 else:
                     problem_watches.append(get_path(_root, dir))
+        else:
+            if not testsuite:
+                raise SystemExit(
+                    'problem_storage_root not specified in "%s"; no problems available to grade' % model_file
+                )
 
     if testsuite:
         if not os.path.isdir(args.tests_dir):
@@ -214,6 +238,32 @@ def get_problem_root(problem_id):
 
 
 _problem_dirs_cache = None
+
+
+def get_problem_roots_glob(warnings=False):
+    global _problem_dirs_cache
+
+    if _problem_dirs_cache is not None:
+        return _problem_dirs_cache
+
+    def get_path(x, y):
+        return utf8text(os.path.normpath(os.path.join(x, y)))
+
+    dirs = []
+    for dir_glob in problem_globs:
+        dirs += [get_path(_root, dir) for dir in glob.iglob(dir_glob, recursive=True)]
+
+    if warnings:
+        cleaned_dirs = []
+        for dir in dirs:
+            if not os.path.isdir(dir):
+                startup_warnings.append('cannot access problem directory %s (does it exist?)' % dir)
+                continue
+            cleaned_dirs.append(dir)
+    else:
+        cleaned_dirs = dirs
+    _problem_dirs_cache = cleaned_dirs
+    return cleaned_dirs
 
 
 def get_problem_roots(warnings=False):
