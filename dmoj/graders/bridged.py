@@ -37,7 +37,7 @@ class BridgedInteractiveGrader(StandardGrader):
 
         return (not result.result_flag) and parsed_result
 
-    def _launch_process(self, case):
+    def _launch_process(self, case, input_file=None):
         self._interactor_stdin_pipe, submission_stdout_pipe = os.pipe()
         submission_stdin_pipe, self._interactor_stdout_pipe = os.pipe()
         self._current_proc = self.binary.launch(
