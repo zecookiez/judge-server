@@ -235,7 +235,7 @@ class JavacExecutor(JavaExecutor):
 
     def handle_compile_error(self, output):
         if b'is public, should be declared in a file named' in utf8bytes(output):
-            raise CompileError('Public Class Error - Please do not use a public class when submitting.\n')
+            raise CompileError('Public Class Error - Please use exactly one public class in your submission.\n')
         raise CompileError(output)
 
     @classmethod
