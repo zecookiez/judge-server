@@ -218,7 +218,7 @@ class JavacExecutor(JavaExecutor):
         try:
             source_code = utf8text(source_code)
         except UnicodeDecodeError:
-            raise CompileError('Your UTF-8 is bad, and you should feel bad')
+            raise CompileError('Unicode Error - Please stick to UTF-8 characters in your submission.')
         class_name = find_class(source_code)
         self._code = self._file('%s.java' % class_name.group(1))
         try:
@@ -226,7 +226,7 @@ class JavacExecutor(JavaExecutor):
                 fo.write(utf8bytes(source_code))
         except IOError as e:
             if e.errno in (errno.ENAMETOOLONG, errno.ENOENT, errno.EINVAL):
-                raise CompileError('Why do you need a class name so long? As a judge, I sentence your code to death.\n')
+                raise CompileError('Class Name Error - Please use a shorter class name.\n')
             raise
         self._class_name = class_name.group(1)
 
@@ -235,7 +235,7 @@ class JavacExecutor(JavaExecutor):
 
     def handle_compile_error(self, output):
         if b'is public, should be declared in a file named' in utf8bytes(output):
-            raise CompileError('You are a troll. Trolls are not welcome. As a judge, I sentence your code to death.\n')
+            raise CompileError('Public Class Error - Please do not use a public class when submitting.\n')
         raise CompileError(output)
 
     @classmethod
